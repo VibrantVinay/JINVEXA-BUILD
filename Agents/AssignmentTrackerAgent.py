@@ -26,7 +26,7 @@ class AssignmentTrackerAgent(BaseAgent):
         
         self.results_dir = Path("learn_files/assignments/results")
         self.progress_dir = Path("learn_files/assignments/progress")
-        self.progress_dir.mkdir(exist_ok=True)
+        self.progress_dir.mkdir(parents=True, exist_ok=True)
 
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process input and return user progress."""
