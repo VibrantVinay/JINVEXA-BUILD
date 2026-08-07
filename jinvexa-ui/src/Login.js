@@ -25,7 +25,8 @@ function Login({ onLogin }) {
       : { username: email, password };
 
     try {
-      const response = await fetch(``${API_BASE_URL}${endpoint}`, {
+      // FIX: Corrected the backtick syntax here
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
