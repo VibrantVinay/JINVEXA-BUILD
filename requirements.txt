@@ -27,3 +27,11 @@ edge-tts
 # Add MongoDB dependency
 pymongo
 dnspython
+
+fastapi 
+
+uvicorn 
+
+dnspython
+
+requests / httpx
