@@ -21,19 +21,19 @@ from Agents.AssignmentTrackerAgent import AssignmentTrackerAgent
 from Agents.AssignmentGeneratorAgent import AssignmentGeneratorAgent
 from Agents.AssignmentEvaluatorAgent import AssignmentEvaluatorAgent
 
-# Set default model for OpenRouter (You can change this or override it via environment variables)
+# Set default model for OpenRouter
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-70b-instruct")
 
 class JinvexaLLMClient:
     """
-    Cloud LLM Client connected to OpenRouter API
+    Cloud LLM Client connected to OpenRouter API with robust JSON parsing
     """
     def __init__(self, model: str = OPENROUTER_MODEL):
         self.model = model
         self.api_key = os.getenv("OPENROUTER_API_KEY")
         self.url = "https://openrouter.ai/api/v1/chat/completions"
 
-    async def complete(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    async def complete(self, prompt: str, system_prompt: Optional[str] = None, json_mode: bool = False) -> str:
         if not self.api_key:
             print("❌ OPENROUTER_API_KEY is not set in environment variables.")
             return "Error: OPENROUTER_API_KEY environment variable missing on server."
@@ -57,6 +57,10 @@ class JinvexaLLMClient:
             "max_tokens": 2000
         }
 
+        # Tell OpenRouter/Llama to enforce strict JSON output when requested
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
         try:
             import httpx
             async with httpx.AsyncClient() as client:
@@ -74,16 +78,30 @@ class JinvexaLLMClient:
             return f"Error executing model {self.model}: {str(e)}"
 
     async def complete_with_json(self, prompt: str, system_prompt: Optional[str] = None) -> Any:
-        response = await self.complete(prompt, system_prompt)
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        # Request strict JSON mode from OpenRouter
+        response = await self.complete(prompt, system_prompt, json_mode=True)
+        
+        if not response or response.startswith("Error"):
+            return {}
+
+        # 1. Clean markdown code blocks (```json ... ```)
+        cleaned = re.sub(r'```(?:json)?', '', response)
+        cleaned = cleaned.replace('```', '').strip()
+
+        # 2. Extract JSON object
+        json_match = re.search(r'(\{[\s\S]*\})', cleaned)
         if json_match:
             try:
-                return json.loads(json_match.group())
-            except Exception:
-                pass
+                return json.loads(json_match.group(1))
+            except Exception as e:
+                print(f"⚠️ JSON Regex Parse Error: {e}")
+
+        # 3. Direct JSON parse fallback
         try:
-            return json.loads(response)
-        except Exception:
+            return json.loads(cleaned)
+        except Exception as e:
+            print(f"⚠️ Direct JSON Parse Error: {e}")
+            print(f"Raw Output: {response[:150]}...")
             return {}
 
 class AgentOrchestrator:
