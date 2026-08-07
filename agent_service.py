@@ -21,54 +21,56 @@ from Agents.AssignmentTrackerAgent import AssignmentTrackerAgent
 from Agents.AssignmentGeneratorAgent import AssignmentGeneratorAgent
 from Agents.AssignmentEvaluatorAgent import AssignmentEvaluatorAgent
 
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:31b-cloud")
+# Set default model for OpenRouter (You can change this or override it via environment variables)
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-70b-instruct")
 
 class JinvexaLLMClient:
     """
-    Ollama LLM Client connected to gemma4:31b-cloud
+    Cloud LLM Client connected to OpenRouter API
     """
-    def __init__(self, model: str = OLLAMA_MODEL):
+    def __init__(self, model: str = OPENROUTER_MODEL):
         self.model = model
-        try:
-            import ollama
-            self.ollama = ollama
-        except ImportError:
-            self.ollama = None
-            print("⚠️ 'ollama' package not installed. Run: pip install ollama")
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        self.url = "https://openrouter.ai/api/v1/chat/completions"
 
     async def complete(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        if not self.api_key:
+            print("❌ OPENROUTER_API_KEY is not set in environment variables.")
+            return "Error: OPENROUTER_API_KEY environment variable missing on server."
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://jinvexa.com",
+            "X-Title": "Jinvexa AI"
+        }
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 2000
+        }
+
         try:
-            if self.ollama:
-                response = await asyncio.to_thread(
-                    self.ollama.chat,
-                    model=self.model,
-                    messages=messages,
-                    options={"temperature": 0.3, "num_predict": 2000}
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.url,
+                    headers=headers,
+                    json=payload,
+                    timeout=120.0
                 )
-                if hasattr(response, 'message'):
-                    if hasattr(response.message, 'content'):
-                        return response.message.content
-                    elif isinstance(response.message, dict):
-                        return response.message.get('content', '')
-                elif isinstance(response, dict):
-                    return response.get('message', {}).get('content', '')
-                return str(response)
-            else:
-                import httpx
-                async with httpx.AsyncClient() as client:
-                    res = await client.post("http://localhost:11434/api/chat", json={
-                        "model": self.model,
-                        "messages": messages,
-                        "stream": False
-                    }, timeout=120.0)
-                    return res.json().get("message", {}).get("content", "")
+                response.raise_for_status()
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
         except Exception as e:
-            print(f"❌ Ollama Error ({self.model}): {e}")
+            print(f"❌ OpenRouter Error ({self.model}): {e}")
             return f"Error executing model {self.model}: {str(e)}"
 
     async def complete_with_json(self, prompt: str, system_prompt: Optional[str] = None) -> Any:
@@ -89,7 +91,7 @@ class AgentOrchestrator:
         # 1. Initialize Memory (Hooks into MongoDB)
         self.memory = MemoryHandler(storage_type="mongodb")
         
-        # 2. Initialize the LLM Client
+        # 2. Initialize the OpenRouter-backed LLM Client
         self.llm = JinvexaLLMClient()
         
         # 3. Initialize the REAL Data Extractor (Playwright)
