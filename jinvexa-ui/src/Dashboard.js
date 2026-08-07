@@ -7,8 +7,8 @@ function Dashboard({ user, onLogout }) {
   // Tab State: 'goal', 'reference', 'teaching', 'assignment', 'mentor', 'progress', 'profile'
   const [activeView, setActiveView] = useState('goal');
 
-  // Base backend URL
-  const API_BASE_URL = 'http://127.0.0.1:8000';
+  // Base backend URL: Uses Vercel environment variable in production, localhost in development
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000';
 
   // State for Goal Discovery
   const [goalInput, setGoalInput] = useState('');
