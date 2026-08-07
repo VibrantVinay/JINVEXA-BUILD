@@ -34,4 +34,5 @@ uvicorn
 
 dnspython
 
-requests / httpx
+requests  
+httpx
